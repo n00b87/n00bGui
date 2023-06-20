@@ -1,0 +1,9 @@
+RCBASIC_STUDIO:1.0
+PROJECT_NAME:n00bGUI
+PROJECT_MAIN:main.bas
+AUTHOR:n00b <aka Rodney Cunningham>
+WEBSITE:rcbasic.freeforums.net
+DESCRIPTION:n00bGUI library for RCBasic
+SOURCE_REL:main.bas
+SOURCE_REL:gui.bas
+SOURCE_REL:strings.bas
