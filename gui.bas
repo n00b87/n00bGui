@@ -1,7 +1,5 @@
 Include Once
 
-Include "strings.bas"
-
 GUI_DIR$ = Dir$
 
 GUI_FONT = 0
@@ -40,7 +38,6 @@ MAX_IMAGESLIDES = 100
 MAX_IMAGESLIDE_CLIPS = 100
 MAX_IMAGES = 1024
 MAX_SURFACES = 50
-MAX_TEXTBOXES = 100
 
 'MOUSE STATE
 MOUSE_STATE = 0
@@ -78,16 +75,12 @@ IMAGESLIDE_PRESSED = 22
 IMAGESLIDE_RELEASED = 23
 SURFACE_PRESSED = 24
 SURFACE_RELEASED = 25
-TEXTBOX_PRESSED = 26
-TEXTBOX_RELEASED = 27
-TEXTBOX_RETURN = 28
 
 'GUI STATE
 GUI_STATE = 0
 
 GUI_STATE_DROPDOWN_OPEN = 1
 GUI_STATE_TEXTFIELD_EDIT = 2
-GUI_STATE_TEXTBOX_EDIT = 3
 
 'Gui
 GUI_TYPE_PANEL = 1
@@ -101,7 +94,6 @@ GUI_TYPE_LABEL = 8
 GUI_TYPE_IMAGECLIP = 9
 GUI_TYPE_IMAGESLIDE = 10
 GUI_TYPE_SURFACE = 11
-GUI_TYPE_TEXTBOX = 12
 
 Dim Gui_Element_Index[MAX_GUI_ELEMENTS]
 Dim Gui_Element_Type[MAX_GUI_ELEMENTS]
@@ -137,7 +129,6 @@ WINDOW_OBJECT_TYPE_IMAGESLIDE = 7
 WINDOW_OBJECT_TYPE_LABEL = 8
 WINDOW_OBJECT_TYPE_SURFACE = 9
 WINDOW_OBJECT_TYPE_TABGROUP = 10
-WINDOW_OBJECT_TYPE_TEXTBOX = 4
 
 'WINDOW_OBJECT Structure
 '0 - TYPE
@@ -261,23 +252,6 @@ Dim Gui_TextField_Value$[MAX_TEXTFIELDS]
 Dim Gui_TextField_Offset[MAX_TEXTFIELDS]
 Dim Gui_TextField_isPassword[MAX_TEXTFIELDS]
 
-'TextField
-GUI_TEXTBOX_COLOR1 = GUI_TEXTFIELD_COLOR1
-GUI_TEXTBOX_BORDER_COLOR = GUI_TEXTFIELD_BORDER_COLOR
-Dim GUI_TEXTBOX_MIN_W
-Dim GUI_TEXTBOX_MIN_H
-Dim Gui_TextBox_Panel[MAX_TEXTBOXES]
-Dim Gui_TextBox_Exists[MAX_TEXTBOXES]
-Dim Gui_TextBox_isDynamic[MAX_TEXTBOXES]
-Dim Gui_TextBox_X[MAX_TEXTBOXES]
-Dim Gui_TextBox_Y[MAX_TEXTBOXES]
-Dim Gui_TextBox_W[MAX_TEXTBOXES]
-Dim Gui_TextBox_H[MAX_TEXTBOXES]
-Dim Gui_TextBox_Image[MAX_TEXTBOXES]
-Dim Gui_TextBox_Value$[MAX_TEXTBOXES]
-Dim Gui_TextBox_Offset[MAX_TEXTBOXES]
-Dim Gui_TextBox_isWordWrapped[MAX_TEXTBOXES]
-
 'CheckBox
 GUI_CHECKBOX_COLOR1 = RGB(140, 140, 140)
 GUI_CHECKBOX_COLOR2 = RGB(100, 100, 100)
@@ -366,6 +340,8 @@ GUI_SURFACE_CMD_CLEAR = 23
 GUI_SURFACE_CMD_FLOODFILL = 24
 GUI_SURFACE_CMD_SETCLEARCOLOR = 25
 GUI_SURFACE_CMD_SETCOLOR = 26
+GUI_SURFACE_CMD_GETPIXEL = 27
+GUI_SURFACE_CMD_DRAWTEXT = 28
 
 GUI_SURFACE_CLEAR_COLOR = RGB(0, 0, 0)
 GUI_SURFACE_BORDER_COLOR = RGB(80, 80, 80)
@@ -379,6 +355,7 @@ Dim Gui_Surface_Image[MAX_SURFACES]
 Dim Gui_Surface_MouseX[MAX_SURFACES]
 Dim Gui_Surface_MouseY[MAX_SURFACES]
 Dim Gui_Surface_DrawCommand[MAX_SURFACES, 2048, 16]
+Dim Gui_Surface_DrawCommand_Str$[MAX_SURFACES, 2048, 2]
 Dim Gui_Surface_NumCommands[MAX_SURFACES]
 
 Dim gui_current_win
@@ -1822,85 +1799,6 @@ Function Gui_CreateTextField(w, h)
 	Return -1
 End Function
 
-Sub RedrawTextBox(t_index)
-	'DEBUG NEEDED
-	'need to redraw textfield
-	If ImageExists(Gui_TextBox_Image[t_index]) Then
-		DeleteImage(Gui_TextBox_Image[t_index])
-	End If
-	Canvas(GUI_TMP_CANVAS)
-	ClearCanvas
-	w = Gui_TextBox_W[t_index]
-	h = Gui_TextBox_H[t_index]
-	If GUI_STATE = GUI_STATE_TEXTBOX_EDIT Then
-		SetColor(rgb(255,255,255))
-	Else
-		SetColor(GUI_TEXTBOX_COLOR1)
-	End If
-	RectFill(0, 0, w, h)
-	Font(GUI_FONT)
-	SetColor(GUI_FONT_COLOR)
-	txt$ = Mid(Gui_TextBox_Value$[t_index], Gui_TextBox_Offset[t_index], Length(Gui_TextBox_Value$[t_index]))
-	If Length(txt$) = 0 Then
-		DrawText(" ", 1, 1)
-	ElseIf Gui_TextBox_isWordWrapped[t_index] Then
-		DrawText(StringFill$("*", Length(txt$)), 1, 1)
-	Else
-		DrawText(txt$, 1, 1)
-	End If
-	SetColor(GUI_TEXTBOX_BORDER_COLOR)
-	Rect(0, 0, w, h)
-	CanvasClip(Gui_TextBox_Image[t_index], 0, 0, w, h, 1)
-End Sub
-
-Function Gui_CreateTextBox(w, h)
-	id = Gui_GetFreeID
-	If id < 0 Then
-		Return -1
-	End If
-	For i = 0 to MAX_TEXTBOXES-1
-		If Not Gui_TextBox_Exists[i] Then
-			Gui_TextBox_Exists[i] = True
-			Gui_TextBox_W[i] = w
-			Gui_TextBox_H[i] = h
-			Gui_TextBox_Offset[i] = 0
-			
-			Canvas(GUI_TMP_CANVAS)
-			ClearCanvas
-			
-			img = Gui_GetFreeImage
-			
-			SetColor(GUI_TEXTBOX_COLOR1)
-			RectFill(0, 0, w, h)
-			SetColor(GUI_TEXTBOX_BORDER_COLOR)
-			Rect(0, 0, w, h)
-			CanvasClip(img, 0, 0, w, h, 1)
-			Gui_TextBox_Image[i] = img
-			
-			Gui_Element_Type[id] = GUI_TYPE_TEXTBOX
-			Gui_Element_Index[id] = i
-			Gui_Element_Exists[id] = True
-			Gui_Element_Active[id] = True
-			Return id
-		End If
-	Next
-	Return -1
-End Function
-
-Sub DrawTextBox(obj_index)
-	MAX_TEXTBOX_TOKENS = 3000
-	RectFill(Gui_TextBox_X[obj_index], Gui_TextBox_Y[obj_index], Gui_TextBox_W[obj_index], Gui_TextBox_H[obj_index])
-	SetColor(RGB(20,20,20))
-	Font(GUI_FONT)
-	tb_value$= Gui_TextBox_Value$[object_index]
-	Replace(tb_value$, "\t", StringFill$(" ",4))
-	Dim tb_token$[MAX_TEXTBOX_TOKENS, 2] '0 - preceed delim, 1 - token
-	While tb_value$ <> ""
-		t$ = FindFirstOf
-	DrawText(Gui_TextBox_Value$[obj_index]+" ", Gui_TextBox_X[obj_index], Gui_TextBox_Y[obj_index])
-	SetColor(PANEL_BKG_VALUE)
-End Sub
-
 Function Gui_CreateDynamicTextField(w, h)
 	id = Gui_GetFreeID
 	If id < 0 Then
@@ -2018,13 +1916,6 @@ Function IsOnObject(id, x, y)
 		x = x - Gui_Panel_X[panel_index]
 		y = y - Gui_Panel_Y[panel_index]
 		If x >= Gui_TextField_X[obj_index] And x < (Gui_TextField_X[obj_index]+Gui_TextField_W[obj_index]) And y >= Gui_TextField_Y[obj_index] And y < (Gui_TextField_Y[obj_index]+Gui_TextField_H[obj_index]) Then
-			Return True
-		End If
-	Case GUI_TYPE_TEXTBOX
-		panel_index = Gui_Element_Index[ Gui_TextBox_Panel[obj_index] ]
-		x = x - Gui_Panel_X[panel_index]
-		y = y - Gui_Panel_Y[panel_index]
-		If x >= Gui_TextBox_X[obj_index] And x < (Gui_TextBox_X[obj_index]+Gui_TextBox_W[obj_index]) And y >= Gui_TextBox_Y[obj_index] And y < (Gui_TextBox_Y[obj_index]+Gui_TextBox_H[obj_index]) Then
 			Return True
 		End If
 	Case GUI_TYPE_CHECKBOX
@@ -2430,37 +2321,6 @@ Sub Gui_PollEvents()
 							Return
 						End If
 					End If
-				'TEXTBOX
-				Case GUI_TYPE_TEXTBOX
-					If Not Gui_TextBox_isDynamic[obj_index] Then
-						If (EVENT_TYPE = TEXTBOX_PRESSED Or EVENT_TYPE = TEXTBOX_RELEASED) And EVENT_ID <> i Then
-							'Do nothing and continue looping
-						ElseIf EVENT_TYPE = TEXTBOX_PRESSED And IsOnObject(i,mx,my) And MOUSE_STATE = MOUSE_RELEASED Then
-							EVENT_TYPE = TEXTBOX_RELEASED
-							EVENT_ID = i
-							'print "released"
-							Return
-						ElseIf EVENT_TYPE = 0 And IsOnObject(i,mx,my) And MOUSE_STATE = MOUSE_PRESSED Then
-							EVENT_TYPE = TEXTBOX_PRESSED
-							EVENT_ID = i
-							'print "pressed"
-							Return
-						ElseIf EVENT_TYPE = 0 And IsOnObject(i,mx,my) And MOUSE_STATE = MOUSE_HOLD Then
-							'mouse is down before going over button
-							Return
-						ElseIf EVENT_TYPE = TEXTBOX_PRESSED And MOUSE_STATE = MOUSE_HOLD Then
-							Return
-						ElseIf EVENT_TYPE = TEXTBOX_RELEASED Then
-							GUI_STATE = GUI_STATE_TEXTBOX_EDIT
-							ReadInput_Start
-							ReadInput_SetText(Gui_TextBox_Value$[obj_index])
-							Return
-						ElseIf EVENT_TYPE = TEXTBOX_PRESSED Or EVENT_TYPE = TEXTBOX_RETURN Then
-							EVENT_TYPE = 0
-							'print "null"
-							Return
-						End If
-					End If
 				Case GUI_TYPE_CHECKBOX
 					'Gui_CheckBox_Current_Image[obj_index] = 0
 					If (EVENT_TYPE = CHECKBOX_PRESSED Or EVENT_TYPE = CHECKBOX_RELEASED) And EVENT_ID <> i Then
@@ -2643,13 +2503,6 @@ Sub Gui_DrawPanel(panel)
 				Else
 					DrawImage(Gui_TextField_Image[obj_index], Gui_TextField_X[obj_index], Gui_TextField_Y[obj_index] )
 				End If
-			Case GUI_TYPE_TEXTBOX
-				If Gui_TextBox_isDynamic[obj_index] Then
-					DrawTextBox(obj_index)
-				Else
-					'print "test"
-					DrawImage(Gui_TextBox_Image[obj_index], Gui_TextBox_X[obj_index], Gui_TextBox_Y[obj_index] )
-				End If
 			Case GUI_TYPE_CHECKBOX
 				DrawImage(Gui_CheckBox_Image[obj_index, Gui_CheckBox_Current_Image[obj_index] ], Gui_CheckBox_X[obj_index], Gui_CheckBox_Y[obj_index] )
 			Case GUI_TYPE_LABEL
@@ -2718,7 +2571,6 @@ Function Gui_Update()
 	If WindowHasMouseFocus(win) Then
 		Gui_PollEvents
 	End If
-	SetClearColor(GUI_CLEAR_COLOR)
 	Canvas(GUI_WIN_CANVAS)
 	ClearCanvas
 	For i = 0 to MAX_PANELS-1
@@ -3214,6 +3066,16 @@ Sub Gui_Surface_DrawImage_Flip(id, img, x, y, h, v)
 	Gui_Surface_NumCommands[surface_index] = cmd_num + 1
 End Sub
 
+Sub Gui_Surface_DrawText(id, txt$, x, y)
+	surface_index = Gui_Element_Index[id]
+	cmd_num = Gui_Surface_NumCommands[surface_index]
+	Gui_Surface_DrawCommand[surface_index, cmd_num, 0] = GUI_SURFACE_CMD_DRAWTEXT
+	Gui_Surface_DrawCommand_Str$[surface_index, cmd_num, 0] = txt$
+	Gui_Surface_DrawCommand[surface_index, cmd_num, 2] = x
+	Gui_Surface_DrawCommand[surface_index, cmd_num, 3] = y
+	Gui_Surface_NumCommands[surface_index] = cmd_num + 1
+End Sub
+
 Sub Gui_Surface_DrawImage_Flip_Ex(id, img, x, y, sx, sy, sw, sh, h, v)
 	surface_index = Gui_Element_Index[id]
 	cmd_num = Gui_Surface_NumCommands[surface_index]
@@ -3352,6 +3214,23 @@ Sub Gui_Surface_FloodFill(id, x, y)
 	Gui_Surface_NumCommands[surface_index] = cmd_num + 1
 End Sub
 
+Function Gui_Surface_GetPixel(id, x, y)
+	If id < 0 Then
+		Return 0
+	End If
+	
+	surface_index = Gui_Element_Index[id]
+	
+	If Not ImageExists(Gui_Surface_Image[surface_index]) Then
+		Return 0
+	End If
+	Dim img_w, img_h
+	GetImageSize(Gui_Surface_Image[surface_index], img_w, img_h)
+	Dim buf[img_w*img_h]
+	BufferFromImage(Gui_Surface_Image[surface_index], buf)
+	Return buf[y*img_w+x]
+End Function
+
 Sub Gui_Surface_SetColor(id, color)
 	surface_index = Gui_Element_Index[id]
 	cmd_num = Gui_Surface_NumCommands[surface_index]
@@ -3467,6 +3346,11 @@ Sub Gui_Surface_Update(id)
 			h = Gui_Surface_DrawCommand[surface_index, i, 4]
 			v = Gui_Surface_DrawCommand[surface_index, i, 5]
 			DrawImage_Flip(img, x, y, h, v)
+		Case GUI_SURFACE_CMD_DRAWTEXT
+			txt$ = Gui_Surface_DrawCommand_Str$[surface_index, i, 0]
+			x = Gui_Surface_DrawCommand[surface_index, i, 2]
+			y = Gui_Surface_DrawCommand[surface_index, i, 3]
+			DrawText(txt$, x, y)
 		Case GUI_SURFACE_CMD_DRAWIMAGE_FLIP_EX
 			img = Gui_Surface_DrawCommand[surface_index, i, 1]
 			x = Gui_Surface_DrawCommand[surface_index, i, 2]
